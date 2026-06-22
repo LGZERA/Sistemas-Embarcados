@@ -1,0 +1,173 @@
+int pwmMotorDireito = 4;  // variaveis de velocidade (energia aplicada pela ponte H) e direções
+int motorDireitoA = 6;
+int motorDireitoB = 7;
+
+int pwmMotorEsquerdo = 10;
+int motorEsquerdoA = 9;
+int motorEsquerdoB = 8;
+
+int pinoSensor1 = A0; // pinos dos sensores tcrt
+int pinoSensor2 = A1;
+int pinoSensor3 = A2;
+int pinoSensor4 = A3;
+int pinoSensor5 = A4;
+
+int valorSensor1 = 0;
+int valorSensor2 = 0;
+int valorSensor3 = 0;
+int valorSensor4 = 0;
+int valorSensor5 = 0;
+
+const int velocidadeMax = 220; // velocidades definidas pra controle do sistema
+const int velocidadeMedia = 170;
+const int velocidadeBaixa = 120;
+
+int pisoBranco = 290; // valores de referência obtidos na calibração dos sensores
+int pisoPreto = 70;
+
+int contadorPreto = 0; // contador usado pra detectar perda total da linha
+int ultimoMovimento = 0; // armazena o último movimento executado
+
+unsigned long tempoAnterior = 0; // controle de tempo para limitar execução do loop
+const int intervaloMs = 30;
+
+void setup() {
+
+  pinMode(pwmMotorDireito, OUTPUT); // configuração dos pinos da ponte H como saída
+  pinMode(motorDireitoA, OUTPUT);
+  pinMode(motorDireitoB, OUTPUT);
+
+  pinMode(pwmMotorEsquerdo, OUTPUT);
+  pinMode(motorEsquerdoA, OUTPUT);
+  pinMode(motorEsquerdoB, OUTPUT);
+}
+
+void loop() {
+
+  if (millis() - tempoAnterior < intervaloMs) return; // limita a execução do loop
+  tempoAnterior = millis();
+
+  valorSensor1 = analogRead(pinoSensor1); // leitura dos sensores de linha
+  valorSensor2 = analogRead(pinoSensor2);
+  valorSensor3 = analogRead(pinoSensor3);
+  valorSensor4 = analogRead(pinoSensor4);
+  valorSensor5 = analogRead(pinoSensor5);
+
+  bool s1 = valorSensor1 >= pisoBranco; // detecção de branco nos sensores
+  bool s2 = valorSensor2 >= pisoBranco;
+  bool s3 = valorSensor3 >= pisoBranco;
+  bool s4 = valorSensor4 >= pisoBranco;
+  bool s5 = valorSensor5 >= pisoBranco;
+
+  bool s1p = valorSensor1 <= pisoPreto; // detecção de preto nos sensores
+  bool s2p = valorSensor2 <= pisoPreto;
+  bool s3p = valorSensor3 <= pisoPreto;
+  bool s4p = valorSensor4 <= pisoPreto;
+  bool s5p = valorSensor5 <= pisoPreto;
+
+  if (s1p && s2p && s3p && s4p && s5p) {
+
+    contadorPreto++; // incrementa quando todos os sensores detectam preto
+
+    if (contadorPreto > 30) {
+      pararCarro(); // para o sistema caso a linha seja perdida por muito tempo
+      return;
+    }
+
+  } else {
+    contadorPreto = 0; // reseta o contador se a linha for detectada novamente
+  }
+
+  if (s3) {
+    frente(velocidadeMax); // segue reto quando o sensor central detecta a linha
+    ultimoMovimento = 0;
+  }
+
+  else if (s2 || s1) {
+    if (s1) {
+      esquerdaForte(velocidadeBaixa); // correção forte para a esquerda
+      ultimoMovimento = 3;
+    } else {
+      esquerdaLeve(velocidadeMedia); // correção leve para a esquerda
+      ultimoMovimento = 1;
+    }
+  }
+
+  else if (s4 || s5) {
+    if (s5) {
+      direitaForte(velocidadeBaixa); // correção forte para a direita
+      ultimoMovimento = 4;
+    } else {
+      direitaLeve(velocidadeMedia); // correção leve para a direita
+      ultimoMovimento = 2;
+    }
+  }
+
+  else {
+    if (ultimoMovimento == 0) frente(velocidadeMax); // tenta repetir o último movimento válido
+    else if (ultimoMovimento == 1) esquerdaLeve(velocidadeMedia);
+    else if (ultimoMovimento == 2) direitaLeve(velocidadeMedia);
+    else if (ultimoMovimento == 3) esquerdaForte(velocidadeBaixa);
+    else direitaForte(velocidadeBaixa);
+  }
+}
+
+void frente(int vel) {
+  digitalWrite(motorEsquerdoA, HIGH); // movimenta ambos os motores para frente
+  digitalWrite(motorEsquerdoB, LOW);
+  analogWrite(pwmMotorEsquerdo, vel);
+
+  digitalWrite(motorDireitoA, HIGH);
+  digitalWrite(motorDireitoB, LOW);
+  analogWrite(pwmMotorDireito, vel);
+}
+
+void esquerdaLeve(int vel) {
+  digitalWrite(motorEsquerdoA, HIGH); // reduz o lado esquerdo para curva suave
+  digitalWrite(motorEsquerdoB, LOW);
+  analogWrite(pwmMotorEsquerdo, vel / 2);
+
+  digitalWrite(motorDireitoA, HIGH);
+  digitalWrite(motorDireitoB, LOW);
+  analogWrite(pwmMotorDireito, vel);
+}
+
+void direitaLeve(int vel) {
+  digitalWrite(motorEsquerdoA, HIGH); // reduz o lado direito para curva suave
+  digitalWrite(motorEsquerdoB, LOW);
+  analogWrite(pwmMotorEsquerdo, vel);
+
+  digitalWrite(motorDireitoA, HIGH);
+  digitalWrite(motorDireitoB, LOW);
+  analogWrite(pwmMotorDireito, vel / 2);
+}
+
+void esquerdaForte(int vel) {
+  digitalWrite(motorEsquerdoA, LOW); // trava um lado para curva mais agressiva
+  digitalWrite(motorEsquerdoB, LOW);
+  analogWrite(pwmMotorEsquerdo, vel);
+
+  digitalWrite(motorDireitoA, HIGH);
+  digitalWrite(motorDireitoB, LOW);
+  analogWrite(pwmMotorDireito, vel);
+}
+
+void direitaForte(int vel) {
+  digitalWrite(motorEsquerdoA, HIGH); // curva forte para o outro lado
+  digitalWrite(motorEsquerdoB, LOW);
+  analogWrite(pwmMotorEsquerdo, vel);
+
+  digitalWrite(motorDireitoA, LOW);
+  digitalWrite(motorDireitoB, LOW);
+  analogWrite(pwmMotorDireito, vel);
+}
+
+void pararCarro() {
+  digitalWrite(motorEsquerdoA, LOW); // desliga os motores para parada total
+  digitalWrite(motorEsquerdoB, LOW);
+  analogWrite(pwmMotorEsquerdo, 0);
+
+  digitalWrite(motorDireitoA, LOW);
+  digitalWrite(motorDireitoB, LOW);
+  analogWrite(pwmMotorDireito, 0);
+}
